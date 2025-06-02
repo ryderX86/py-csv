@@ -125,6 +125,20 @@ class CSV:
             raise TypeError("CSV[]: expected 'int' or 'tuple[int]', got '%s'"
                             % type(key).__name__)
         
+    def append_row(self, row:list[Any]):
+        if len(row) < len(self._rows[0]):
+            for _ in range(len(row), len(self._rows[0])):
+                row.append(None)
+        self._rows.append(row)
+
+    def append_col(self, column:list[Any]):
+        column = [[x] for x in column]
+        if len(column) < len(self._rows):
+            for _ in range(len(column), len(self._rows)):
+                column.append([None])
+
+        for rowi in range(column):
+            self._rows[rowi].append(column[rowi])  
     
     def __setitem__(self, key:int|tuple, value:list[Any]|Any):
         if type(key) is int and type(value) is list:
