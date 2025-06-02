@@ -133,7 +133,7 @@ class CSV:
                     raise IndexError("row index out of range")
                 for rowi in range(len(self._rows) + 1, key):
                     self._rows.append(self._get_blank_row())
-            if len(list) > (len(self._rows[0]) - 1):
+            if len(value) > (len(self._rows[0]) - 1):
                 if _strict_tables():
                     raise IndexError("row has too many values "
                                      "(try setting this module's variable strict_tables=False)")
