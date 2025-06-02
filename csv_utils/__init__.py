@@ -138,7 +138,7 @@ class CSV:
                     raise IndexError("row has too many values "
                                      "(try setting this module's variable strict_tables=False)")
                 for rowi in range(len(self._rows)):
-                    for col in range(len(self._rows[rowi]) - 1, len(list)):
+                    for col in range(len(self._rows[rowi]) - 1, len(value)):
                         self._rows[rowi].append(None)
             self._rows[key] = value
         elif type(key) is tuple:
