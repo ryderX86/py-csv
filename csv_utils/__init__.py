@@ -138,7 +138,7 @@ class CSV:
                 column.append([None])
 
         for rowi in range(column):
-            self._rows[rowi].append(column[rowi])  
+            self._rows[rowi].append(column[rowi])
     
     def __setitem__(self, key:int|tuple, value:list[Any]|Any):
         if type(key) is int and type(value) is list:
