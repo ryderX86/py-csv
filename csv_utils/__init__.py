@@ -5,9 +5,9 @@ import json
 import re
 
 CSV_REGEX = r"(?:(?P<cell>(\".+\")|(?:[^,\"\n]*)))(?P<term>[,\n]|$)"
-CELL_ENCLOSED_REGEX = r"\"[\",\n]*"
-CSV_REGEX_CELL_ESCAPED = r"\"[\",\n]\""
-CELL_TO_STR_RE = r"[\",\n]"
+QUOTED_CELL_RE = r"\"[\",\n]*"
+ESCAPED_CELL_RE = r"\"[\",\n]\""
+ESCAPE_CHARS_RE = r"[\",\n]"
 
 _csv_is_compiled = False
 
@@ -22,26 +22,26 @@ def _strict_tables():
 def compile_regex():
     global csv_regex_compiled
     global csv_regex_cell_escaped_compiled
-    global cell_enclosed_regex_compiled
-    global cell_to_str_re_compiled
+    global quoted_cell_re_compiled
+    global escape_chars_re_compiled
     global _csv_is_compiled
     csv_regex_compiled = re.compile(CSV_REGEX)
-    cell_enclosed_regex_compiled = re.compile(CELL_ENCLOSED_REGEX)
-    csv_regex_cell_escaped_compiled = re.compile(CSV_REGEX_CELL_ESCAPED)
-    cell_to_str_re_compiled = re.compile(CELL_TO_STR_RE)
+    quoted_cell_re_compiled = re.compile(QUOTED_CELL_RE)
+    csv_regex_cell_escaped_compiled = re.compile(ESCAPED_CELL_RE)
+    escape_chars_re_compiled = re.compile(ESCAPE_CHARS_RE)
     _csv_is_compiled = True
 
 def _cell_enclosed_finditer(string:str) -> list[re.Match]:
     if _csv_is_compiled:
-        return [*cell_enclosed_regex_compiled.finditer(string)]
+        return [*quoted_cell_re_compiled.finditer(string)]
     else:
-        return [*re.finditer(CELL_ENCLOSED_REGEX, string)]
+        return [*re.finditer(QUOTED_CELL_RE, string)]
     
 def _cell_escaped_finditer(string:str) -> list[re.Match]:
     if _csv_is_compiled:
         return [*csv_regex_cell_escaped_compiled.finditer(string)]
     else:
-        return [*re.finditer(CSV_REGEX_CELL_ESCAPED, string)]
+        return [*re.finditer(ESCAPED_CELL_RE, string)]
 
 def _csv_from_str_regex(string:str) -> list[re.Match]:
     if _csv_is_compiled:
@@ -367,11 +367,11 @@ class CSV:
 def str_from_cell(cell:str, parent:CSV) -> str:
     matches: list[re.Match]
     if _csv_is_compiled:
-        matches = [*cell_to_str_re_compiled.finditer(cell)]
+        matches = [*escape_chars_re_compiled.finditer(cell)]
     elif parent.uses_custom_regex:
         matches = [*re.finditer(parent._cell_to_str_re, cell)]
     else:
-        matches = [*re.finditer(CELL_TO_STR_RE, cell)]
+        matches = [*re.finditer(ESCAPE_CHARS_RE, cell)]
     cell_out = cell
     if len(matches) > 0:
         cell_out = parent._escape + cell_out + parent._escape
