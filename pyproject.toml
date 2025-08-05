@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "py_csv"
-version = "25.8.1a"
+version = "25.8.1a3"
 authors = [
     {name="ryderX86", email="ryder@r86.me"}
 ]

@@ -3,7 +3,7 @@ from enum import Enum
 import json
 import re
 
-CSV_REGEX = r"(?:(?P<cell>(\".+\")|(?:[^,\"\n]*)))(?P<term>[,\n]|$)"
+CSV_REGEX = r"(?:(?P<cell>((?P<start>\"|\')(?P<cell_content>(?:(?:[^,\n]|(?!(?P=start)))|(?P<escc>(?!(?P=start))[^\'\"](?!(?P=start)))|(?P<escq>(?:\'|\")[^\"\',\n]?(?:\'|\")))+)(?P=start))|(?:[^,\"\'\n]*)))(?P<term>[,\n]|$)"
 QUOTED_CELL_RE = r"\"[\",\n]*"
 ESCAPED_CELL_RE = r"\"[\",\n]\""
 ESCAPE_CHARS_RE = r"[\",\n]"
@@ -63,29 +63,53 @@ def compile_regex():
     global _quoted_cell_re_compiled
     global _escape_chars_re_compiled
     global _regexp_is_compiled
+    global _find_quoted_cells
+    global _find_escaped_cells
+    global _csv_file_regex
     _csv_regex_compiled = re.compile(CSV_REGEX)
     _quoted_cell_re_compiled = re.compile(QUOTED_CELL_RE)
     _csv_regex_cell_escaped_compiled = re.compile(ESCAPED_CELL_RE)
     _escape_chars_re_compiled = re.compile(ESCAPE_CHARS_RE)
+    _find_quoted_cells = _find_quoted_cells_comp
+    _find_escaped_cells = _find_escaped_cells_comp
+    _csv_file_regex = _csv_file_regex_comp
     _regexp_is_compiled = True
 
-def _cell_enclosed_finditer(string:str) -> list[re.Match]:
-    if _regexp_is_compiled:
-        return [*_quoted_cell_re_compiled.finditer(string)]
-    else:
-        return [*re.finditer(QUOTED_CELL_RE, string)]
-    
-def _cell_escaped_finditer(string:str) -> list[re.Match]:
-    if _regexp_is_compiled:
-        return [*_csv_regex_cell_escaped_compiled.finditer(string)]
-    else:
-        return [*re.finditer(ESCAPED_CELL_RE, string)]
+def _find_quoted_cells(string:str) -> list[re.Match]:
+    """
+    Wrapper function for `QUOTED_CELL_RE` regexp
+    """
+    return [*re.finditer(QUOTED_CELL_RE, string)]
 
-def _csv_from_str_regex(string:str) -> list[re.Match]:
-    if _regexp_is_compiled:
-        return [*_csv_regex_compiled.finditer(string)]
-    else:
-        return [*re.finditer(CSV_REGEX, string)]
+def _find_escaped_cells(string:str) -> list[re.Match]:
+    """
+    Wrapper function for `ESCAPED_CELL_RE` regexp
+    """
+    return [*re.finditer(ESCAPED_CELL_RE, string)]
+
+def _csv_file_regex(string:str) -> list[re.Match]:
+    """
+    Wrapper function for `CSV_REGEX` regexp
+    """
+    return [*re.finditer(CSV_REGEX, string)]
+
+"""
+If we compile the default regexps, replace the functions
+wrapping them with the below functions wrapping the
+compiled versions.
+
+This should in theory be far more efficient than my
+previous implementation of checking at every run.
+"""
+
+def _find_quoted_cells_comp(string:str) -> list[re.Match]:
+    return [*_quoted_cell_re_compiled.finditer(string)]
+    
+def _find_escaped_cells_comp(string:str) -> list[re.Match]:
+    return [*_csv_regex_cell_escaped_compiled.finditer(string)]
+
+def _csv_file_regex_comp(string:str) -> list[re.Match]:
+    return [*_csv_regex_compiled.finditer(string)]
 
 class CSV:
     allowed_converstion_types = (int, float, Literal, complex, bool)
@@ -409,27 +433,39 @@ class CSV:
         mostly a double quote '"', but in some cases can be a backslash '\\'
         """
         # If regex needs to be replaced:
-        _csv_regex = r"(?:(?P<cell>({e}.+{e})|(?:[^{c}{e}{r}]*)))(?P<term>[{c}{r}]|$)".replace(r'{e}', escape).replace(r'{r}', rowend).replace('{c}', cellend)
+        _csv_regex = r"(?:(?P<cell>((?P<start>%ESC%)(?P<cell_content>(?:(?:[^%CEND%\\%REND%]|(?!(?P=start)))"
+        _csv_regex += r"|(?P<escc>(?!(?P=start))[^\\%ESC%](?!(?P=start)))"
+        _csv_regex += r"|(?P<escq>(?:%ESC%|%ESC%)[^\\%ESC%%CEND%\\%REND%]?(?:\'|\")))+)(?P=start))|(?:[^%CEND%\\%ESC%%REND%]*)))(?P<term>[%CEND%%REND%]|$)"
+        _csv_regex = _csv_regex.replace(r'%ESC%', escape).replace(r'%REND%', rowend).replace('%CEND%', cellend)
         _cell_enclosed_regex = r"{e}[{e}{c}{r}]*".replace(r'{e}', escape).replace(r'{r}', rowend).replace('{c}', cellend)
         _cell_escaped_regex = r"{e}[{e}{c}{r}]{e}".replace(r'{e}', escape).replace(r'{r}', rowend).replace('{c}', cellend)
         _cell_to_str_re = r"[{e}{c}{r}]".replace(r'{e}', escape).replace(r'{r}', rowend).replace('{c}', cellend)
         _uses_custom_regex = False
-        def _repl_csv_from_str_regex(data) -> list[re.Match]:
+
+        """
+        If the regexp needs to be replaced (determined by args `cellend`, `rowend`, and `escape`),
+        the above variables will be used instead of the defaults. This allows for the default regexps
+        to be compiled and used consistently, while also allowing non-standard formats.
+        """
+
+        # Wrap regexps in functions similar to default
+        def _repl_csv_file_regex(data) -> list[re.Match]:
             return [*re.finditer(_csv_regex, data)]
-        def _repl_cell_enclosed_regex(data) -> list[re.Match]:
+        def _repl_find_quoted_cells(data) -> list[re.Match]:
             return [*re.finditer(_cell_enclosed_regex, data)]
-        def _repl_cell_escaped_regex(data) -> list[re.Match]:
+        def _repl_find_escaped_cells(data) -> list[re.Match]:
             return [*re.finditer(_cell_escaped_regex, data)]
+        
         if cellend != ',' or rowend != '\n' or escape != '"':
-            __csv_from_str_regex = _repl_csv_from_str_regex
-            __cell_enclosed_regex = _repl_cell_enclosed_regex
-            __cell_escaped_regex = _repl_cell_escaped_regex
+            __csv_file_regex = _repl_csv_file_regex
+            __quoted_cell_regex = _repl_find_quoted_cells
+            __escaped_cell_regex = _repl_find_escaped_cells
             _uses_custom_regex = True
         else:
-            __csv_from_str_regex = _csv_from_str_regex
-            __cell_enclosed_regex = _cell_enclosed_finditer
-            __cell_escaped_regex = _cell_escaped_finditer
-        regex_data = __csv_from_str_regex(data)
+            __csv_file_regex = _csv_file_regex
+            __quoted_cell_regex = _find_quoted_cells
+            __escaped_cell_regex = _find_escaped_cells
+        regex_data = __csv_file_regex(data)
         rows_in = []
         current_row = []
         for m in regex_data:
@@ -462,12 +498,12 @@ class CSV:
                 elif cell[0] == escape and cell[-1] == escape:
                     # The entire cell is escaped
                     cell = cell[1:-1]
-                    ma = __cell_enclosed_regex(cell)
+                    ma = __quoted_cell_regex(cell)
                     for match in ma:
                         matched_str = match.string[match.start():match.end()]
                         cell.replace(matched_str, matched_str[1])
-                elif __cell_escaped_regex(cell):
-                    ma = __cell_escaped_regex(cell)
+                elif __escaped_cell_regex(cell):
+                    ma = __escaped_cell_regex(cell)
                     for match in ma:
                         matched_str = match.string[match.start():match.end()]
                         cell.replace(matched_str, matched_str[1])
